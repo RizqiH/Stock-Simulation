@@ -1,0 +1,77 @@
+# Essential Jenkins Plugins for Stock Simulation Backend CI/CD
+# This file lists all required plugins for the Jenkins setup
+
+# Core Pipeline Plugins
+pipeline-stage-view:latest
+workflow-aggregator:latest
+workflow-job:latest
+workflow-cps:latest
+workflow-basic-steps:latest
+workflow-durable-task-step:latest
+workflow-scm-step:latest
+workflow-support:latest
+
+# Docker Integration
+docker-workflow:latest
+docker-plugin:latest
+docker-commons:latest
+docker-build-step:latest
+
+# Git and GitHub Integration
+git:latest
+github:latest
+github-branch-source:latest
+github-pullrequest:latest
+scm-api:latest
+
+# Build and Test Tools
+go:latest
+html-publisher:latest
+junit:latest
+coverage:latest
+cobertura:latest
+warnings-ng:latest
+
+# Notification and Reporting
+email-ext:latest
+slack:latest
+build-timeout:latest
+timestamper:latest
+ws-cleanup:latest
+
+# Security
+matrix-auth:latest
+role-strategy:latest
+credentials:latest
+credentials-binding:latest
+plain-credentials:latest
+ssh-credentials:latest
+
+# UI and User Experience
+blue-ocean:latest
+blue-ocean-pipeline-api:latest
+blue-ocean-pipeline-editor:latest
+blue-ocean-rest:latest
+blue-ocean-autofavorite:latest
+
+# Utility Plugins
+build-name-setter:latest
+build-user-vars-plugin:latest
+config-file-provider:latest
+envinject:latest
+parameter-separator:latest
+rebuild:latest
+safe-restart:latest
+
+# Monitoring and Metrics
+prometheus:latest
+monitoring:latest
+
+# Additional Useful Plugins
+ant:latest
+gradle:latest
+maven-plugin:latest
+node-and-npm-plugin:latest
+pipeline-utility-steps:latest
+http_request:latest
+generic-webhook-trigger:latest

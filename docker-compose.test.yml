@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock-simulation-api-test
+    ports:
+      - "${API_PORT:-8081}:8080"
+    environment:
+      - DATABASE_URL=stockuser:stockpassword@tcp(mysql:3306)/stock_simulation_test
+      - REDIS_URL=redis://redis:6379
+      - ENV=test
+      - LOG_LEVEL=debug
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stock-simulation-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - .:/app
+    working_dir: /app
+
+  mysql:
+    image: mysql:8.0
+    container_name: stock-simulation-mysql-test
+    ports:
+      - "${MYSQL_PORT:-3308}:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=stock_simulation_test
+      - MYSQL_USER=${MYSQL_USER:-stockuser}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-stockpassword}
+    volumes:
+      - mysql_test_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d
+    networks:
+      - stock-simulation-test-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password
+
+  redis:
+    image: redis:7-alpine
+    container_name: stock-simulation-redis-test
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_test_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - stock-simulation-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+  # Test runner service
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: stock-simulation-test-runner
+    environment:
+      - DATABASE_URL=stockuser:stockpassword@tcp(mysql:3306)/stock_simulation_test
+      - REDIS_URL=redis://redis:6379
+      - ENV=test
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stock-simulation-test-network
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app
+    profiles:
+      - test
+
+volumes:
+  mysql_test_data:
+    driver: local
+  redis_test_data:
+    driver: local
+
+networks:
+  stock-simulation-test-network:
+    driver: bridge
+    name: stock-simulation-test-network

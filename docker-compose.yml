@@ -1,0 +1,94 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: stock-simulation-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_simulation}
+      MYSQL_USER: ${MYSQL_USER:-stockuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-stockpassword}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: stock-simulation-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  # Stock Simulation API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock-simulation-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MYSQL_USER:-stockuser}:${MYSQL_PASSWORD:-stockpassword}@tcp(mysql:3306)/${MYSQL_DATABASE:-stock_simulation}?parseTime=true
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-this-in-production}
+      - GIN_MODE=${GIN_MODE:-debug}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Adminer untuk database management (optional)
+  adminer:
+    image: adminer:latest
+    container_name: stock-simulation-adminer
+    restart: unless-stopped
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+    depends_on:
+      - mysql
+    networks:
+      - stock-network
+    profiles:
+      - tools
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  stock-network:
+    driver: bridge

@@ -1,0 +1,114 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Environment files
+.env*
+!.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+bin/
+build/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+testdata/
+coverage.out
+coverage.html
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Node.js (if any frontend assets)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker files (avoid recursive copying)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Scripts (not needed in container)
+scripts/
+
+# Database files
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads and user data
+uploads/
+data/
+storage/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Cache directories
+.cache/
+.npm/
+.yarn/
+
+# Go specific
+vendor/
+
+# Docker volumes
+docker/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Monitoring and logs
+logs/
+*.log
+
+# Development tools
+Makefile
+.editorconfig
+.eslintrc*
+.prettierrc*
