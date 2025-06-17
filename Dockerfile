@@ -39,8 +39,7 @@ WORKDIR /app
 # Copy binary dari builder stage
 COPY --from=builder /app/main .
 
-# Copy migration files
-COPY --from=builder /app/migrations ./migrations
+# Note: No migration files to copy in this project
 
 # Change ownership ke appuser
 RUN chown -R appuser:appgroup /app
