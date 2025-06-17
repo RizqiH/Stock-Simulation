@@ -1,0 +1,116 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+api.exe
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+*.html
+coverage.out
+coverage.html
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Go workspace file
+go.work
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker volumes and data
+jenkins_home/
+mysql_data/
+redis_data/
+
+# Logs
+*.log
+logs/
+
+# Testing artifacts
+test_results/
+test_coverage/
+*.test.log
+
+# Local testing files
+test.db
+test_*.sql
+*.tmp
+*.temp
+
+# Build artifacts
+build/
+dist/
+bin/
+
+# Temporary files
+tmp/
+temp/
+
+# Local configuration overrides
+config.local.yaml
+config.local.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache directories
+.cache/
+node_modules/
+
+# Documentation build
+docs/_build/
+docs/site/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Local development certificates
+*.pem
+*.key
+*.crt
+*.p12
+
+# Performance profiling
+*.prof
+*.pprof
+cpu.prof
+mem.prof
+
+# Local mock data
+mock_data/
+test_fixtures/
+
+# Local scripts
+local_*.sh
+local_*.bat
+dev_*.sh
+dev_*.bat
