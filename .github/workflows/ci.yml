@@ -63,7 +63,7 @@ jobs:
     - name: Install testing tools
       run: |
         go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@v2.21.4
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@v2.21.2
         go install golang.org/x/vuln/cmd/govulncheck@latest
     
     - name: Run linter
