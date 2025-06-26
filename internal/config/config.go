@@ -134,6 +134,27 @@ func getEnvAsDuration(key string, defaultValue string) time.Duration {
 
 // GetDSN returns the database connection string
 func (c *Config) GetDSN() string {
+	// For Railway production, prioritize individual DB variables over DATABASE_URL
+	// This helps avoid DNS resolution issues with Railway's internal networking
+	if c.IsProduction() && c.Database.Host != "" {
+		// Use individual variables for more reliable Railway connection
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			c.Database.User,
+			c.Database.Password,
+			c.Database.Host,
+			c.Database.Port,
+			c.Database.DBName,
+		)
+		
+		// Add TLS for Railway proxy connections
+		if strings.Contains(c.Database.Host, "railway.") || strings.Contains(c.Database.Host, "proxy.rlwy.net") {
+			dsn += "&tls=true"
+		}
+		
+		return dsn
+	}
+	
+	// Fallback to DATABASE_URL if individual variables not available
 	if c.Database.URL != "" {
 		// Railway provides DATABASE_URL, use it directly
 		// Add SSL parameters for Railway if not already present
