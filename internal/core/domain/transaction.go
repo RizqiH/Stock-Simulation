@@ -15,7 +15,7 @@ type Transaction struct {
     ID          int             `json:"id" db:"id"`
     UserID      int             `json:"user_id" db:"user_id"`
     StockSymbol string          `json:"stock_symbol" db:"stock_symbol"`
-    Type        TransactionType `json:"type" db:"type"`
+    Type        TransactionType `json:"type" db:"transaction_type"`
     Quantity    int             `json:"quantity" db:"quantity"`
     Price       float64         `json:"price" db:"price"`
     TotalAmount float64         `json:"total_amount" db:"total_amount"`

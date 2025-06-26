@@ -17,7 +17,7 @@ func NewTransactionRepository(db *sql.DB) repositories.TransactionRepository {
 
 func (r *transactionRepository) Create(transaction *domain.Transaction) error {
 	query := `
-		INSERT INTO transactions (user_id, stock_symbol, type, quantity, price, total_amount, created_at)
+		INSERT INTO transactions (user_id, stock_symbol, transaction_type, quantity, price, total_amount, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, NOW())
 	`
 	result, err := r.db.Exec(query, transaction.UserID, transaction.StockSymbol,
@@ -37,7 +37,7 @@ func (r *transactionRepository) Create(transaction *domain.Transaction) error {
 
 func (r *transactionRepository) GetByID(id int) (*domain.Transaction, error) {
 	query := `
-		SELECT id, user_id, stock_symbol, type, quantity, price, total_amount, created_at
+		SELECT id, user_id, stock_symbol, transaction_type, quantity, price, total_amount, created_at
 		FROM transactions WHERE id = ?
 	`
 	var transaction domain.Transaction
@@ -57,7 +57,7 @@ func (r *transactionRepository) GetByID(id int) (*domain.Transaction, error) {
 
 func (r *transactionRepository) GetByUserID(userID int, limit, offset int) ([]domain.Transaction, error) {
 	query := `
-		SELECT id, user_id, stock_symbol, type, quantity, price, total_amount, created_at
+		SELECT id, user_id, stock_symbol, transaction_type, quantity, price, total_amount, created_at
 		FROM transactions 
 		WHERE user_id = ?
 		ORDER BY created_at DESC
@@ -86,7 +86,7 @@ func (r *transactionRepository) GetByUserID(userID int, limit, offset int) ([]do
 
 func (r *transactionRepository) GetByUserIDAndSymbol(userID int, stockSymbol string, limit int) ([]domain.Transaction, error) {
 	query := `
-		SELECT id, user_id, stock_symbol, type, quantity, price, total_amount, created_at
+		SELECT id, user_id, stock_symbol, transaction_type, quantity, price, total_amount, created_at
 		FROM transactions 
 		WHERE user_id = ? AND stock_symbol = ?
 		ORDER BY created_at DESC
@@ -115,9 +115,9 @@ func (r *transactionRepository) GetByUserIDAndSymbol(userID int, stockSymbol str
 
 func (r *transactionRepository) GetByUserIDAndType(userID int, transactionType string, limit int) ([]domain.Transaction, error) {
 	query := `
-		SELECT id, user_id, stock_symbol, type, quantity, price, total_amount, created_at
+		SELECT id, user_id, stock_symbol, transaction_type, quantity, price, total_amount, created_at
 		FROM transactions 
-		WHERE user_id = ? AND type = ?
+		WHERE user_id = ? AND transaction_type = ?
 		ORDER BY created_at DESC
 		LIMIT ?
 	`
@@ -144,7 +144,7 @@ func (r *transactionRepository) GetByUserIDAndType(userID int, transactionType s
 
 func (r *transactionRepository) GetUserTransactionHistory(userID int, stockSymbol, transactionType string, limit int) ([]domain.Transaction, error) {
 	query := `
-		SELECT id, user_id, stock_symbol, type, quantity, price, total_amount, created_at
+		SELECT id, user_id, stock_symbol, transaction_type, quantity, price, total_amount, created_at
 		FROM transactions 
 		WHERE user_id = ?
 	`
@@ -156,7 +156,7 @@ func (r *transactionRepository) GetUserTransactionHistory(userID int, stockSymbo
 	}
 
 	if transactionType != "" {
-		query += " AND type = ?"
+		query += " AND transaction_type = ?"
 		args = append(args, transactionType)
 	}
 

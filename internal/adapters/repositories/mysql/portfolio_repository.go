@@ -17,7 +17,7 @@ func NewPortfolioRepository(db *sql.DB) repositories.PortfolioRepository {
 
 func (r *portfolioRepository) Create(portfolio *domain.Portfolio) error {
 	query := `
-		INSERT INTO portfolios (user_id, stock_symbol, quantity, average_price, total_cost, updated_at)
+		INSERT INTO portfolio (user_id, stock_symbol, quantity, average_price, total_cost, updated_at)
 		VALUES (?, ?, ?, ?, ?, NOW())
 	`
 	result, err := r.db.Exec(query, portfolio.UserID, portfolio.StockSymbol,
@@ -38,7 +38,7 @@ func (r *portfolioRepository) Create(portfolio *domain.Portfolio) error {
 func (r *portfolioRepository) GetByUserID(userID int) ([]domain.Portfolio, error) {
 	query := `
 		SELECT id, user_id, stock_symbol, quantity, average_price, total_cost, updated_at
-		FROM portfolios 
+		FROM portfolio 
 		WHERE user_id = ? AND quantity > 0
 		ORDER BY stock_symbol
 	`
@@ -66,7 +66,7 @@ func (r *portfolioRepository) GetByUserID(userID int) ([]domain.Portfolio, error
 func (r *portfolioRepository) GetByUserIDAndSymbol(userID int, stockSymbol string) (*domain.Portfolio, error) {
 	query := `
 		SELECT id, user_id, stock_symbol, quantity, average_price, total_cost, updated_at
-		FROM portfolios 
+		FROM portfolio 
 		WHERE user_id = ? AND stock_symbol = ?
 	`
 	var portfolio domain.Portfolio
@@ -86,7 +86,7 @@ func (r *portfolioRepository) GetByUserIDAndSymbol(userID int, stockSymbol strin
 
 func (r *portfolioRepository) Update(portfolio *domain.Portfolio) error {
 	query := `
-		UPDATE portfolios 
+		UPDATE portfolio 
 		SET quantity = ?, average_price = ?, total_cost = ?, updated_at = NOW()
 		WHERE id = ?
 	`
@@ -99,7 +99,7 @@ func (r *portfolioRepository) Update(portfolio *domain.Portfolio) error {
 }
 
 func (r *portfolioRepository) Delete(userID int, stockSymbol string) error {
-	query := `DELETE FROM portfolios WHERE user_id = ? AND stock_symbol = ?`
+	query := `DELETE FROM portfolio WHERE user_id = ? AND stock_symbol = ?`
 	_, err := r.db.Exec(query, userID, stockSymbol)
 	if err != nil {
 		return fmt.Errorf("failed to delete portfolio: %w", err)
@@ -110,7 +110,7 @@ func (r *portfolioRepository) Delete(userID int, stockSymbol string) error {
 func (r *portfolioRepository) GetPortfolioValue(userID int) (float64, error) {
 	query := `
 		SELECT COALESCE(SUM(p.quantity * s.current_price), 0) as total_value
-		FROM portfolios p
+		FROM portfolio p
 		JOIN stocks s ON p.stock_symbol = s.symbol
 		WHERE p.user_id = ? AND p.quantity > 0
 	`
@@ -134,7 +134,7 @@ func (r *portfolioRepository) GetPortfolioSummary(userID int) (*domain.Portfolio
 			(p.quantity * s.current_price) as current_value,
 			((p.quantity * s.current_price) - p.total_cost) as profit_loss,
 			(((p.quantity * s.current_price) - p.total_cost) / p.total_cost * 100) as profit_loss_pct
-		FROM portfolios p
+		FROM portfolio p
 		JOIN stocks s ON p.stock_symbol = s.symbol
 		WHERE p.user_id = ? AND p.quantity > 0
 		ORDER BY p.stock_symbol

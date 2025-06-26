@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -11,98 +11,97 @@ import (
 )
 
 type Config struct {
-	// Server Configuration
-	Port    string
-	GinMode string
-	LogLevel string
-
-	// Database Configuration
-	DatabaseURL      string
-	MySQLHost        string
-	MySQLPort        string
-	MySQLUser        string
-	MySQLPassword    string
-	MySQLDatabase    string
-	MySQLRootPassword string
-
-	// Redis Configuration
-	RedisURL  string
-	RedisPort string
-
-	// JWT Configuration
-	JWTSecret string
-
-	// File Upload Configuration
-	MaxUploadSize string
-	UploadPath    string
-
-	// Rate Limiting Configuration
-	RateLimitRequests int
-	RateLimitWindow   time.Duration
-
-	// CORS Configuration
-	CORSAllowedOrigins []string
-	CORSAllowedMethods []string
-	CORSAllowedHeaders []string
-
-	// External APIs
-	StockAPIKey string
-	StockAPIURL string
-
-	// Email Configuration
-	SMTPHost     string
-	SMTPPort     string
-	SMTPUser     string
-	SMTPPassword string
+	Database DatabaseConfig
+	Server   ServerConfig
+	JWT      JWTConfig
+	CORS     CORSConfig
+	Redis    RedisConfig
 }
 
-func Load() *Config {
+type DatabaseConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	URL      string
+}
+
+type ServerConfig struct {
+	Port    string
+	Host    string
+	ENV     string
+	GinMode string
+}
+
+type JWTConfig struct {
+	Secret string
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string
+	AllowedMethods []string
+	AllowedHeaders []string
+}
+
+type RedisConfig struct {
+	URL  string
+	Port string
+}
+
+func LoadConfig() *Config {
+	// Load .env file if it exists (for local development)
 	_ = godotenv.Load()
-
+	
+	port, _ := strconv.Atoi(getEnv("DB_PORT", "3307"))
+	
+	// Parse CORS origins
+	corsOrigins := []string{
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+	}
+	
+	if envOrigins := getEnv("CORS_ORIGINS", ""); envOrigins != "" {
+		// Split by comma and add to origins
+		origins := strings.Split(envOrigins, ",")
+		for _, origin := range origins {
+			corsOrigins = append(corsOrigins, strings.TrimSpace(origin))
+		}
+	}
+	
+	// Set GinMode based on environment
+	ginMode := "debug"
+	if getEnv("ENV", "development") == "production" {
+		ginMode = "release"
+	}
+	
 	return &Config{
-		// Server Configuration
-		Port:     getEnv("PORT", "8080"),
-		GinMode:  getEnv("GIN_MODE", "debug"),
-		LogLevel: getEnv("LOG_LEVEL", "info"),
-
-		// Database Configuration
-		DatabaseURL:       getEnvRequired("DATABASE_URL"),
-		MySQLHost:         getEnv("MYSQL_HOST", "localhost"),
-		MySQLPort:         getEnv("MYSQL_PORT", "3306"),
-		MySQLUser:         getEnv("MYSQL_USER", "user"),
-		MySQLPassword:     getEnvRequired("MYSQL_PASSWORD"),
-		MySQLDatabase:     getEnv("MYSQL_DATABASE", "stock_simulation"),
-		MySQLRootPassword: getEnvRequired("MYSQL_ROOT_PASSWORD"),
-
-		// Redis Configuration
-		RedisURL:  getEnv("REDIS_URL", "redis://localhost:6379"),
-		RedisPort: getEnv("REDIS_PORT", "6379"),
-
-		// JWT Configuration
-		JWTSecret: getEnvRequired("JWT_SECRET"),
-
-		// File Upload Configuration
-		MaxUploadSize: getEnv("MAX_UPLOAD_SIZE", "10MB"),
-		UploadPath:    getEnv("UPLOAD_PATH", "./uploads"),
-
-		// Rate Limiting Configuration
-		RateLimitRequests: getEnvAsInt("RATE_LIMIT_REQUESTS", 100),
-		RateLimitWindow:   getEnvAsDuration("RATE_LIMIT_WINDOW", "1m"),
-
-		// CORS Configuration
-		CORSAllowedOrigins: getEnvAsSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
-		CORSAllowedMethods: getEnvAsSlice("CORS_ALLOWED_METHODS", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		CORSAllowedHeaders: getEnvAsSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization"}),
-
-		// External APIs
-		StockAPIKey: getEnv("STOCK_API_KEY", ""),
-		StockAPIURL: getEnv("STOCK_API_URL", ""),
-
-		// Email Configuration
-		SMTPHost:     getEnv("SMTP_HOST", ""),
-		SMTPPort:     getEnv("SMTP_PORT", "587"),
-		SMTPUser:     getEnv("SMTP_USER", ""),
-		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		Database: DatabaseConfig{
+			Host:     getEnv("DB_HOST", "localhost"),
+			Port:     port,
+			User:     getEnv("DB_USER", "root"),
+			Password: getEnv("DB_PASSWORD", "root"),
+			DBName:   getEnv("DB_NAME", "stock_simulation"),
+			URL:      getEnv("DATABASE_URL", ""),
+		},
+		Server: ServerConfig{
+			Port:    getEnv("PORT", "8080"),
+			Host:    getEnv("HOST", "0.0.0.0"),
+			ENV:     getEnv("ENV", "development"),
+			GinMode: ginMode,
+		},
+		JWT: JWTConfig{
+			Secret: getEnv("JWT_SECRET", "your-secret-key-change-this-in-production"),
+		},
+		CORS: CORSConfig{
+			AllowedOrigins: corsOrigins,
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{"Content-Type", "Authorization", "X-Requested-With"},
+		},
+		Redis: RedisConfig{
+			URL:  getEnv("REDIS_URL", "redis://localhost:6379"),
+			Port: getEnv("REDIS_PORT", "6379"),
+		},
 	}
 }
 
@@ -114,38 +113,76 @@ func getEnv(key, defaultValue string) string {
 }
 
 func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
+	valueStr := getEnv(key, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
 	}
 	return defaultValue
 }
 
-func getEnvAsDuration(key, defaultValue string) time.Duration {
-	if value := os.Getenv(key); value != "" {
-		if duration, err := time.ParseDuration(value); err == nil {
-			return duration
+func getEnvAsDuration(key string, defaultValue string) time.Duration {
+	valueStr := getEnv(key, defaultValue)
+	if value, err := time.ParseDuration(valueStr); err == nil {
+		return value
+	}
+	// If parsing fails, parse the default value
+	if defaultDuration, err := time.ParseDuration(defaultValue); err == nil {
+		return defaultDuration
+	}
+	return time.Minute // fallback
+}
+
+// GetDSN returns the database connection string
+func (c *Config) GetDSN() string {
+	if c.Database.URL != "" {
+		// Railway provides DATABASE_URL, use it directly
+		// Add SSL parameters for Railway if not already present
+		if strings.Contains(c.Database.URL, "railway.app") && !strings.Contains(c.Database.URL, "tls=") {
+			if strings.Contains(c.Database.URL, "?") {
+				return c.Database.URL + "&tls=true&charset=utf8mb4&parseTime=True&loc=Local"
+			} else {
+				return c.Database.URL + "?tls=true&charset=utf8mb4&parseTime=True&loc=Local"
+			}
 		}
+		// For other DATABASE_URL formats, ensure required parameters
+		if !strings.Contains(c.Database.URL, "charset=") {
+			if strings.Contains(c.Database.URL, "?") {
+				return c.Database.URL + "&charset=utf8mb4&parseTime=True&loc=Local"
+			} else {
+				return c.Database.URL + "?charset=utf8mb4&parseTime=True&loc=Local"
+			}
+		}
+		return c.Database.URL
 	}
-	if duration, err := time.ParseDuration(defaultValue); err == nil {
-		return duration
+	
+	// Build DSN manually for local development
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		c.Database.User,
+		c.Database.Password,
+		c.Database.Host,
+		c.Database.Port,
+		c.Database.DBName,
+	)
+	
+	// Add TLS for Railway hosts
+	if strings.Contains(c.Database.Host, "railway.app") {
+		dsn += "&tls=true"
 	}
-	return time.Minute
+	
+	return dsn
 }
 
-func getEnvAsSlice(key string, defaultValue []string) []string {
-	if value := os.Getenv(key); value != "" {
-		return strings.Split(value, ",")
-	}
-	return defaultValue
+// IsProduction returns true if running in production environment
+func (c *Config) IsProduction() bool {
+	return c.Server.ENV == "production"
 }
 
-// getEnvRequired returns the value of an environment variable or exits if not set
-func getEnvRequired(key string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		log.Fatalf("Required environment variable %s is not set", key)
-	}
-	return value
+// IsDevelopment returns true if running in development environment
+func (c *Config) IsDevelopment() bool {
+	return c.Server.ENV == "development"
+}
+
+// GetServerAddress returns the full server address
+func (c *Config) GetServerAddress() string {
+	return c.Server.Host + ":" + c.Server.Port
 }

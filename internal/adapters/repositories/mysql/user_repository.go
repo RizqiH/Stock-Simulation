@@ -111,8 +111,7 @@ func (r *userRepository) UpdateTotalProfit(userID int, totalProfit float64) erro
 
 func (r *userRepository) GetLeaderboard(limit int) ([]domain.UserProfile, error) {
 	query := `
-		SELECT id, username, email, balance, total_profit,
-		       ROW_NUMBER() OVER (ORDER BY total_profit DESC) as rank
+		SELECT id, username, email, balance, total_profit
 		FROM users
 		ORDER BY total_profit DESC
 		LIMIT ?
@@ -124,14 +123,17 @@ func (r *userRepository) GetLeaderboard(limit int) ([]domain.UserProfile, error)
 	defer rows.Close()
 
 	var profiles []domain.UserProfile
+	rank := 1
 	for rows.Next() {
 		var profile domain.UserProfile
 		err := rows.Scan(&profile.ID, &profile.Username, &profile.Email,
-			&profile.Balance, &profile.TotalProfit, &profile.Rank)
+			&profile.Balance, &profile.TotalProfit)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user profile: %w", err)
 		}
+		profile.Rank = rank
 		profiles = append(profiles, profile)
+		rank++
 	}
 
 	return profiles, nil

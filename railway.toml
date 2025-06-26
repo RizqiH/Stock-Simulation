@@ -1,0 +1,42 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "./main"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+# Production Environment Variables for Railway
+# These will be automatically set by Railway when you connect the services
+
+# Server Configuration
+PORT = "8080"
+HOST = "0.0.0.0"
+ENV = "production"
+
+# Database Configuration (Railway MySQL Service)
+# These variables are automatically provided by Railway when you add MySQL service
+# Format: ${{ServiceName.VARIABLE_NAME}}
+DB_HOST = "${{MySQL.MYSQL_HOST}}"
+DB_PORT = "${{MySQL.MYSQL_PORT}}"
+DB_USER = "${{MySQL.MYSQL_USER}}"
+DB_PASSWORD = "${{MySQL.MYSQL_PASSWORD}}"
+DB_NAME = "${{MySQL.MYSQL_DATABASE}}"
+DATABASE_URL = "${{MySQL.DATABASE_URL}}"
+
+# Security Configuration
+JWT_SECRET = "your-production-jwt-secret-change-this-immediately"
+
+# CORS Configuration - Update with your frontend domain
+CORS_ORIGINS = "https://your-frontend-domain.railway.app,https://your-custom-domain.com"
+
+# Redis Configuration (if you add Redis service)
+# REDIS_URL = "${{Redis.REDIS_URL}}"
+
+# Additional Railway-specific settings
+# These help with Railway deployment optimization
+RAILWAY_ENVIRONMENT = "production" 

@@ -17,8 +17,7 @@ func NewStockRepository(db *sql.DB) repositories.StockRepository {
 
 func (r *stockRepository) GetAll() ([]domain.Stock, error) {
 	query := `
-		SELECT id, symbol, name, current_price, open_price, high_price, low_price,
-		       volume, market_cap, sector, updated_at
+		SELECT id, symbol, name, current_price, previous_close, volume, market_cap, updated_at
 		FROM stocks
 		ORDER BY symbol
 	`
@@ -32,8 +31,7 @@ func (r *stockRepository) GetAll() ([]domain.Stock, error) {
 	for rows.Next() {
 		var stock domain.Stock
 		err := rows.Scan(&stock.ID, &stock.Symbol, &stock.Name, &stock.CurrentPrice,
-			&stock.OpenPrice, &stock.HighPrice, &stock.LowPrice, &stock.Volume,
-			&stock.MarketCap, &stock.Sector, &stock.UpdatedAt)
+			&stock.PreviousClose, &stock.Volume, &stock.MarketCap, &stock.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan stock: %w", err)
 		}
@@ -45,15 +43,13 @@ func (r *stockRepository) GetAll() ([]domain.Stock, error) {
 
 func (r *stockRepository) GetBySymbol(symbol string) (*domain.Stock, error) {
 	query := `
-		SELECT id, symbol, name, current_price, open_price, high_price, low_price,
-		       volume, market_cap, sector, updated_at
+		SELECT id, symbol, name, current_price, previous_close, volume, market_cap, updated_at
 		FROM stocks WHERE symbol = ?
 	`
 	var stock domain.Stock
 	err := r.db.QueryRow(query, symbol).Scan(
 		&stock.ID, &stock.Symbol, &stock.Name, &stock.CurrentPrice,
-		&stock.OpenPrice, &stock.HighPrice, &stock.LowPrice, &stock.Volume,
-		&stock.MarketCap, &stock.Sector, &stock.UpdatedAt,
+		&stock.PreviousClose, &stock.Volume, &stock.MarketCap, &stock.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -75,13 +71,11 @@ func (r *stockRepository) UpdatePrice(symbol string, price float64) error {
 
 func (r *stockRepository) Create(stock *domain.Stock) error {
 	query := `
-		INSERT INTO stocks (symbol, name, current_price, open_price, high_price, low_price,
-		                   volume, market_cap, sector, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+		INSERT INTO stocks (symbol, name, current_price, previous_close, volume, market_cap, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, NOW())
 	`
 	result, err := r.db.Exec(query, stock.Symbol, stock.Name, stock.CurrentPrice,
-		stock.OpenPrice, stock.HighPrice, stock.LowPrice, stock.Volume,
-		stock.MarketCap, stock.Sector)
+		stock.PreviousClose, stock.Volume, stock.MarketCap)
 	if err != nil {
 		return fmt.Errorf("failed to create stock: %w", err)
 	}
@@ -97,8 +91,7 @@ func (r *stockRepository) Create(stock *domain.Stock) error {
 
 func (r *stockRepository) GetTopStocks(limit int) ([]domain.Stock, error) {
 	query := `
-		SELECT id, symbol, name, current_price, open_price, high_price, low_price,
-		       volume, market_cap, sector, updated_at
+		SELECT id, symbol, name, current_price, previous_close, volume, market_cap, updated_at
 		FROM stocks
 		ORDER BY market_cap DESC
 		LIMIT ?
@@ -113,8 +106,7 @@ func (r *stockRepository) GetTopStocks(limit int) ([]domain.Stock, error) {
 	for rows.Next() {
 		var stock domain.Stock
 		err := rows.Scan(&stock.ID, &stock.Symbol, &stock.Name, &stock.CurrentPrice,
-			&stock.OpenPrice, &stock.HighPrice, &stock.LowPrice, &stock.Volume,
-			&stock.MarketCap, &stock.Sector, &stock.UpdatedAt)
+			&stock.PreviousClose, &stock.Volume, &stock.MarketCap, &stock.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan stock: %w", err)
 		}
@@ -127,13 +119,11 @@ func (r *stockRepository) GetTopStocks(limit int) ([]domain.Stock, error) {
 func (r *stockRepository) Update(stock *domain.Stock) error {
 	query := `
 		UPDATE stocks 
-		SET name = ?, current_price = ?, open_price = ?, high_price = ?, low_price = ?,
-		    volume = ?, market_cap = ?, sector = ?, updated_at = NOW()
+		SET name = ?, current_price = ?, previous_close = ?, volume = ?, market_cap = ?, updated_at = NOW()
 		WHERE symbol = ?
 	`
-	_, err := r.db.Exec(query, stock.Name, stock.CurrentPrice, stock.OpenPrice,
-		stock.HighPrice, stock.LowPrice, stock.Volume, stock.MarketCap,
-		stock.Sector, stock.Symbol)
+	_, err := r.db.Exec(query, stock.Name, stock.CurrentPrice, stock.PreviousClose,
+		stock.Volume, stock.MarketCap, stock.Symbol)
 	if err != nil {
 		return fmt.Errorf("failed to update stock: %w", err)
 	}

@@ -1,0 +1,81 @@
+# Railway Production Environment Configuration Example
+# This file shows the format Railway will use for environment variables
+# Copy this content to Railway's environment variables section
+
+# ===================================
+# SERVER CONFIGURATION
+# ===================================
+PORT=8080
+HOST=0.0.0.0
+ENV=production
+
+# ===================================
+# DATABASE CONFIGURATION (Railway MySQL)
+# ===================================
+# Railway automatically provides these when you add MySQL service:
+# DB_HOST=${{MySQL.MYSQL_HOST}}
+# DB_PORT=${{MySQL.MYSQL_PORT}}
+# DB_USER=${{MySQL.MYSQL_USER}}
+# DB_PASSWORD=${{MySQL.MYSQL_PASSWORD}}
+# DB_NAME=${{MySQL.MYSQL_DATABASE}}
+# DATABASE_URL=${{MySQL.DATABASE_URL}}
+
+# Example values (Railway will generate real ones):
+# DB_HOST=containers-us-west-xx.railway.app
+# DB_PORT=3306
+# DB_USER=root
+# DB_PASSWORD=your-railway-generated-password
+# DB_NAME=railway
+# DATABASE_URL=mysql://root:password@host:3306/railway
+
+# ===================================
+# SECURITY CONFIGURATION
+# ===================================
+# IMPORTANT: Set this to a secure secret in Railway dashboard
+JWT_SECRET=your-super-secure-jwt-secret-for-production-change-this-immediately
+
+# ===================================
+# CORS CONFIGURATION
+# ===================================
+# Add your frontend domain(s) - update these with your actual domains
+CORS_ORIGINS=https://your-frontend.railway.app,https://your-custom-domain.com
+
+# ===================================
+# OPTIONAL: REDIS CONFIGURATION
+# ===================================
+# If you add Redis service to Railway, these will be auto-generated:
+# REDIS_URL=${{Redis.REDIS_URL}}
+# REDIS_PORT=${{Redis.REDIS_PORT}}
+
+# ===================================
+# RAILWAY DEPLOYMENT STEPS
+# ===================================
+# 1. Go to https://railway.app and create account
+# 2. Create new project
+# 3. Add MySQL service (Railway will auto-generate DB variables)
+# 4. Add your Go app from GitHub repository
+# 5. Set these environment variables manually in Railway dashboard:
+#    - JWT_SECRET (secure random string)
+#    - CORS_ORIGINS (your frontend URL)
+# 6. Railway will automatically set all ${{MySQL.*}} variables
+# 7. Deploy and test endpoints
+
+# ===================================
+# TESTING AFTER DEPLOYMENT
+# ===================================
+# Test these URLs after deployment:
+# https://your-app.railway.app/health
+# https://your-app.railway.app/api/v1/stocks
+# https://your-app.railway.app/api/v1/ws/status
+# https://your-app.railway.app/ (root endpoint)
+
+# ===================================
+# TROUBLESHOOTING
+# ===================================
+# If connection fails:
+# 1. Check Railway MySQL service is running
+# 2. Verify environment variables are set correctly
+# 3. Check Railway logs for connection errors
+# 4. Ensure TLS/SSL is properly configured (handled automatically by our config)
+# 5. Test database connection manually using Railway CLI:
+#    railway connect MySQL 

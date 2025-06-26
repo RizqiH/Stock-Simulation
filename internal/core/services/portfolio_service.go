@@ -2,6 +2,8 @@ package services
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 	"stock-simulation-backend/internal/core/domain"
 	"stock-simulation-backend/internal/core/ports/repositories"
 	"stock-simulation-backend/internal/core/ports/services"
@@ -116,6 +118,69 @@ func (s *portfolioService) GetPortfolioPerformance(userID int, period string) (*
 	}
 
 	return performance, nil
+}
+
+// New method for time-based portfolio performance with historical data points
+func (s *portfolioService) GetPortfolioPerformanceHistory(userID int, startDate, endDate time.Time) ([]domain.PortfolioDataPoint, error) {
+	// Get current portfolio to understand holdings
+	portfolios, err := s.portfolioRepo.GetByUserID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user portfolio: %w", err)
+	}
+
+	// For now, generate realistic mock data based on current portfolio
+	// In a real implementation, this would query historical portfolio values from database
+	
+	var dataPoints []domain.PortfolioDataPoint
+	var totalCost float64
+
+	// Calculate current total cost
+	for _, portfolio := range portfolios {
+		totalCost += portfolio.TotalCost
+	}
+
+	// If no portfolio exists, use default values
+	if totalCost == 0 {
+		totalCost = 50000 // Default starting value
+	}
+
+	// Generate daily data points from start to end date
+	currentDate := startDate
+	initialValue := totalCost
+	currentValue := initialValue
+	
+	for currentDate.Before(endDate) || currentDate.Equal(endDate) {
+		// Simulate realistic portfolio movement (±2% daily volatility)
+		dailyChange := (rand.Float64() - 0.5) * 0.04 // ±2% daily change
+		marketTrend := 0.0002 // Small positive trend (about 7% annually)
+		
+		currentValue *= (1 + dailyChange + marketTrend)
+		
+		// Ensure value doesn't go negative
+		if currentValue < totalCost * 0.5 {
+			currentValue = totalCost * 0.5
+		}
+		
+		profitLoss := currentValue - totalCost
+		profitLossPct := (profitLoss / totalCost) * 100
+		
+		dataPoint := domain.PortfolioDataPoint{
+			Date:            currentDate,
+			TotalValue:      currentValue,
+			TotalCost:       totalCost,
+			ProfitLoss:      profitLoss,
+			ProfitLossPct:   profitLossPct,
+			CashValue:       5000,  // Assuming some cash
+			InvestmentValue: currentValue - 5000,
+		}
+		
+		dataPoints = append(dataPoints, dataPoint)
+		
+		// Move to next day
+		currentDate = currentDate.AddDate(0, 0, 1)
+	}
+
+	return dataPoints, nil
 }
 
 func (s *portfolioService) GetPortfolioValue(userID int) (float64, error) {

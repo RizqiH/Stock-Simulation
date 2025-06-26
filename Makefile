@@ -12,8 +12,8 @@ help: ## Show this help message
 # Development Commands
 dev: ## Start development environment
 	@echo "Starting development environment..."
-	@copy .env.dev .env >nul 2>&1 || echo "Using existing .env file"
-	@docker-compose --env-file .env.dev up --build -d
+	@copy .env .env >nul 2>&1 || echo "Using existing .env file"
+	@docker-compose --env-file .env up --build -d
 	@echo "Development environment started!"
 	@echo "API: http://localhost:8080"
 	@echo "Adminer: http://localhost:8081"

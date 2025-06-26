@@ -48,7 +48,8 @@ func (h *StockHandler) GetTopStocks(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10")
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		limit = 10
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter"})
+		return
 	}
 
 	stocks, err := h.stockService.GetTopStocks(limit)
@@ -67,20 +68,51 @@ func (h *StockHandler) UpdateStockPrice(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Price float64 `json:"price" binding:"required,gt=0"`
+	var request struct {
+		Price float64 `json:"price" binding:"required,min=0.01"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := h.stockService.UpdateStockPrice(symbol, req.Price)
+	err := h.stockService.UpdateStockPrice(symbol, request.Price)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Stock price updated successfully"})
+	// Get updated stock
+	stock, err := h.stockService.GetStockBySymbol(symbol)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Stock price updated successfully",
+		"stock":   stock,
+	})
+}
+
+// SimulateMarketMovement randomly updates all stock prices for testing
+func (h *StockHandler) SimulateMarketMovement(c *gin.Context) {
+	err := h.stockService.SimulateMarketMovement()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get all updated stocks
+	stocks, err := h.stockService.GetAllStocks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Market movement simulated successfully",
+		"stocks":  stocks,
+	})
 }

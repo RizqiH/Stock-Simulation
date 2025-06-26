@@ -42,3 +42,13 @@ type PortfolioPerformance struct {
     ProfitPct   float64 `json:"profit_pct"`
     Transactions int    `json:"transactions"`
 }
+
+type PortfolioDataPoint struct {
+    Date            time.Time `json:"date"`
+    TotalValue      float64   `json:"total_value"`
+    TotalCost       float64   `json:"total_cost"`
+    ProfitLoss      float64   `json:"profit_loss"`
+    ProfitLossPct   float64   `json:"profit_loss_pct"`
+    CashValue       float64   `json:"cash_value"`
+    InvestmentValue float64   `json:"investment_value"`
+}
