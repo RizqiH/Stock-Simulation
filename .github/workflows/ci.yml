@@ -16,6 +16,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+
+    permissions:
+      packages: write 
     
     services:
       mysql:
