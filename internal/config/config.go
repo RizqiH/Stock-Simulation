@@ -134,46 +134,64 @@ func getEnvAsDuration(key string, defaultValue string) time.Duration {
 
 // GetDSN returns the database connection string
 func (c *Config) GetDSN() string {
-	// For Railway production, prioritize individual DB variables over DATABASE_URL
-	// This helps avoid DNS resolution issues with Railway's internal networking
-	if c.IsProduction() && c.Database.Host != "" {
-		// Use individual variables for more reliable Railway connection
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-			c.Database.User,
-			c.Database.Password,
-			c.Database.Host,
-			c.Database.Port,
-			c.Database.DBName,
-		)
-		
-		// Add TLS for Railway proxy connections
-		if strings.Contains(c.Database.Host, "railway.") || strings.Contains(c.Database.Host, "proxy.rlwy.net") {
-			dsn += "&tls=true"
-		}
-		
-		return dsn
-	}
-	
-	// Fallback to DATABASE_URL if individual variables not available
-	if c.Database.URL != "" {
-		// Railway provides DATABASE_URL, use it directly
-		// Add SSL parameters for Railway if not already present
-		if strings.Contains(c.Database.URL, "railway.app") && !strings.Contains(c.Database.URL, "tls=") {
-			if strings.Contains(c.Database.URL, "?") {
-				return c.Database.URL + "&tls=true&charset=utf8mb4&parseTime=True&loc=Local"
-			} else {
-				return c.Database.URL + "?tls=true&charset=utf8mb4&parseTime=True&loc=Local"
+	// For Railway production, try internal connection first
+	if c.IsProduction() {
+		// If we have DATABASE_URL, try to use it but handle Railway-specific issues
+		if c.Database.URL != "" {
+			// For Railway internal connections, don't add TLS
+			if strings.Contains(c.Database.URL, "railway.internal") {
+				// Clean internal URL - remove TLS for internal connections
+				cleanURL := strings.Replace(c.Database.URL, "&tls=true", "", -1)
+				cleanURL = strings.Replace(cleanURL, "?tls=true", "", -1)
+				
+				// Add required parameters for Railway internal
+				if strings.Contains(cleanURL, "?") {
+					return cleanURL + "&charset=utf8mb4&parseTime=True&loc=Local"
+				} else {
+					return cleanURL + "?charset=utf8mb4&parseTime=True&loc=Local"
+				}
 			}
-		}
-		// For other DATABASE_URL formats, ensure required parameters
-		if !strings.Contains(c.Database.URL, "charset=") {
-			if strings.Contains(c.Database.URL, "?") {
-				return c.Database.URL + "&charset=utf8mb4&parseTime=True&loc=Local"
-			} else {
-				return c.Database.URL + "?charset=utf8mb4&parseTime=True&loc=Local"
+			
+			// For external Railway connections, add TLS
+			if strings.Contains(c.Database.URL, "proxy.rlwy.net") || strings.Contains(c.Database.URL, "railway.app") {
+				if !strings.Contains(c.Database.URL, "tls=") {
+					if strings.Contains(c.Database.URL, "?") {
+						return c.Database.URL + "&tls=true&charset=utf8mb4&parseTime=True&loc=Local"
+					} else {
+						return c.Database.URL + "?tls=true&charset=utf8mb4&parseTime=True&loc=Local"
+					}
+				}
 			}
+			
+			// Default URL handling
+			if !strings.Contains(c.Database.URL, "charset=") {
+				if strings.Contains(c.Database.URL, "?") {
+					return c.Database.URL + "&charset=utf8mb4&parseTime=True&loc=Local"
+				} else {
+					return c.Database.URL + "?charset=utf8mb4&parseTime=True&loc=Local"
+				}
+			}
+			return c.Database.URL
 		}
-		return c.Database.URL
+		
+		// If individual variables are set, use them
+		if c.Database.Host != "" {
+			dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+				c.Database.User,
+				c.Database.Password,
+				c.Database.Host,
+				c.Database.Port,
+				c.Database.DBName,
+			)
+			
+			// Add TLS only for external Railway connections
+			if strings.Contains(c.Database.Host, "proxy.rlwy.net") || strings.Contains(c.Database.Host, "railway.app") {
+				dsn += "&tls=true"
+			}
+			// Do NOT add TLS for .railway.internal connections
+			
+			return dsn
+		}
 	}
 	
 	// Build DSN manually for local development
@@ -184,11 +202,6 @@ func (c *Config) GetDSN() string {
 		c.Database.Port,
 		c.Database.DBName,
 	)
-	
-	// Add TLS for Railway hosts
-	if strings.Contains(c.Database.Host, "railway.app") {
-		dsn += "&tls=true"
-	}
 	
 	return dsn
 }
