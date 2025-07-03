@@ -126,7 +126,9 @@ func (s *AdvancedOrderService) CreateOrder(userID int, request *domain.OrderRequ
 		err = s.executeOrderTransaction(order, stock.CurrentPrice)
 		if err != nil {
 			// If execution fails, cancel the order
-			s.orderRepo.Delete(order.ID)
+			if deleteErr := s.orderRepo.Delete(order.ID); deleteErr != nil {
+				fmt.Printf("Warning: failed to delete failed order %d: %v\n", order.ID, deleteErr)
+			}
 			return nil, fmt.Errorf("failed to execute market order: %w", err)
 		}
 		
@@ -522,55 +524,9 @@ func (s *AdvancedOrderService) executeOrderTransaction(order *domain.Order, exec
 	return nil
 }
 
-func (s *AdvancedOrderService) processBuyTransaction(userID int, symbol string, quantity int, totalCost float64) error {
-	// Get user
-	user, err := s.userRepo.GetByID(userID)
-	if err != nil {
-		return err
-	}
 
-	// Check if user has enough balance
-	if user.Balance < totalCost {
-		return fmt.Errorf("insufficient balance: required %.2f, available %.2f", totalCost, user.Balance)
-	}
 
-	// Deduct balance
-	user.Balance -= totalCost
-	err = s.userRepo.Update(user)
-	if err != nil {
-		return fmt.Errorf("failed to update user balance: %w", err)
-	}
 
-	// Add to portfolio
-	return s.updatePortfolioForBuy(userID, symbol, quantity)
-}
-
-func (s *AdvancedOrderService) processSellTransaction(userID int, symbol string, quantity int, proceeds float64) error {
-	// Check if user has enough shares
-	portfolio, err := s.portfolioRepo.GetByUserIDAndSymbol(userID, symbol)
-	if err != nil {
-		return fmt.Errorf("stock not found in portfolio: %s", symbol)
-	}
-
-	if portfolio.Quantity < quantity {
-		return fmt.Errorf("insufficient shares: required %d, available %d", quantity, portfolio.Quantity)
-	}
-
-	// Add proceeds to user balance
-	user, err := s.userRepo.GetByID(userID)
-	if err != nil {
-		return err
-	}
-
-	user.Balance += proceeds
-	err = s.userRepo.Update(user)
-	if err != nil {
-		return fmt.Errorf("failed to update user balance: %w", err)
-	}
-
-	// Remove from portfolio
-	return s.updatePortfolioForSell(userID, symbol, quantity)
-}
 
 func (s *AdvancedOrderService) processShortTransaction(userID int, symbol string, quantity int, proceeds float64) error {
 	// Add proceeds to user balance (minus margin requirement)
@@ -620,59 +576,9 @@ func (s *AdvancedOrderService) processCoverTransaction(userID int, symbol string
 	return s.updatePortfolioForCover(userID, symbol, quantity)
 }
 
-func (s *AdvancedOrderService) updatePortfolioForBuy(userID int, symbol string, quantity int) error {
-	portfolio, err := s.portfolioRepo.GetByUserIDAndSymbol(userID, symbol)
-	if err != nil {
-		// Create new portfolio entry if doesn't exist
-		stock, err := s.stockRepo.GetBySymbol(symbol)
-		if err != nil {
-			return err
-		}
 
-		newPortfolio := &domain.Portfolio{
-			UserID:       userID,
-			StockSymbol:  symbol,
-			Quantity:     quantity,
-			AveragePrice: stock.CurrentPrice,
-			TotalCost:    float64(quantity) * stock.CurrentPrice,
-		}
-		return s.portfolioRepo.Create(newPortfolio)
-	}
 
-	// Update existing portfolio
-	stock, err := s.stockRepo.GetBySymbol(symbol)
-	if err != nil {
-		return err
-	}
 
-	newQuantity := portfolio.Quantity + quantity
-	newCost := portfolio.TotalCost + (float64(quantity) * stock.CurrentPrice)
-	portfolio.Quantity = newQuantity
-	portfolio.TotalCost = newCost
-	portfolio.AveragePrice = newCost / float64(newQuantity)
-
-	return s.portfolioRepo.Update(portfolio)
-}
-
-func (s *AdvancedOrderService) updatePortfolioForSell(userID int, symbol string, quantity int) error {
-	portfolio, err := s.portfolioRepo.GetByUserIDAndSymbol(userID, symbol)
-	if err != nil {
-		return err
-	}
-
-	portfolio.Quantity -= quantity
-	
-	// If all shares sold, delete portfolio entry
-	if portfolio.Quantity <= 0 {
-		return s.portfolioRepo.Delete(userID, symbol)
-	}
-
-	// Update total cost proportionally
-	sellRatio := float64(quantity) / float64(portfolio.Quantity + quantity)
-	portfolio.TotalCost *= (1 - sellRatio)
-
-	return s.portfolioRepo.Update(portfolio)
-}
 
 func (s *AdvancedOrderService) updatePortfolioForShort(userID int, symbol string, quantity int) error {
 	portfolio, err := s.portfolioRepo.GetByUserIDAndSymbol(userID, symbol)

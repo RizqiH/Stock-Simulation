@@ -15,6 +15,7 @@ type PriceSimulatorService struct {
 	stockRepo           repositories.StockRepository
 	historicalPriceRepo repositories.HistoricalPriceRepository
 	realTimeService     *RealTimeService
+	redisService        *RedisService
 	running             bool
 	stopChan            chan bool
 	mu                  sync.RWMutex
@@ -29,11 +30,13 @@ func NewPriceSimulatorService(
 	stockRepo repositories.StockRepository, 
 	historicalPriceRepo repositories.HistoricalPriceRepository,
 	realTimeService *RealTimeService,
+	redisService *RedisService,
 ) *PriceSimulatorService {
 	return &PriceSimulatorService{
 		stockRepo:           stockRepo,
 		historicalPriceRepo: historicalPriceRepo,
 		realTimeService:     realTimeService,
+		redisService:        redisService,
 		running:             false,
 		stopChan:            make(chan bool),
 		updateInterval:      5 * time.Second,  // Update every 5 seconds
@@ -56,7 +59,12 @@ func (s *PriceSimulatorService) Start() {
 	s.stopChan = make(chan bool)
 	
 	go s.runSimulation()
-	log.Println("🚀 Price simulator started - updating every", s.updateInterval)
+	
+	if s.redisService != nil {
+		log.Println("🚀 Price simulator started with Redis pub/sub - updating every", s.updateInterval)
+	} else {
+		log.Println("🚀 Price simulator started with WebSocket only - updating every", s.updateInterval)
+	}
 }
 
 // Stop halts the price simulation
@@ -86,15 +94,19 @@ func (s *PriceSimulatorService) runSimulation() {
 	ticker := time.NewTicker(s.updateInterval)
 	defer ticker.Stop()
 	
-	// Seed random number generator
-	rand.Seed(time.Now().UnixNano())
+	// Create random number generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	
-	log.Println("📈 Starting automatic price updates with real-time broadcasting...")
+	if s.redisService != nil {
+		log.Println("📈 Starting automatic price updates with Redis pub/sub and real-time broadcasting...")
+	} else {
+		log.Println("📈 Starting automatic price updates with WebSocket broadcasting...")
+	}
 	
 	for {
 		select {
 		case <-ticker.C:
-			s.updateAllPrices()
+			s.updateAllPrices(rng)
 		case <-s.stopChan:
 			log.Println("📉 Price simulation stopped")
 			return
@@ -103,7 +115,7 @@ func (s *PriceSimulatorService) runSimulation() {
 }
 
 // updateAllPrices updates all stock prices with realistic movements
-func (s *PriceSimulatorService) updateAllPrices() {
+func (s *PriceSimulatorService) updateAllPrices(rng *rand.Rand) {
 	stocks, err := s.stockRepo.GetAll()
 	if err != nil {
 		log.Printf("❌ Failed to get stocks for price update: %v", err)
@@ -120,7 +132,7 @@ func (s *PriceSimulatorService) updateAllPrices() {
 	updatedCount := 0
 	for _, stock := range stocks {
 		oldPrice := stock.CurrentPrice
-		newPrice := s.generateRealisticPrice(stock)
+		newPrice := s.generateRealisticPrice(stock, rng)
 		
 		// Update stock price in database
 		err := s.stockRepo.UpdatePrice(stock.Symbol, newPrice)
@@ -152,7 +164,19 @@ func (s *PriceSimulatorService) updateAllPrices() {
 			MarketCap:     &stock.MarketCap,
 		}
 		
-		// Broadcast real-time update to WebSocket clients
+		// Publish to Redis first (this will be picked up by all instances)
+		if s.redisService != nil {
+			if err := s.redisService.PublishPriceUpdate(priceUpdate); err != nil {
+				log.Printf("⚠️ Failed to publish %s to Redis: %v", stock.Symbol, err)
+			}
+			
+			// Also cache the price in Redis for quick access
+			if err := s.redisService.CacheStockPrice(stock.Symbol, newPrice, 30*time.Second); err != nil {
+				log.Printf("⚠️ Failed to cache %s price in Redis: %v", stock.Symbol, err)
+			}
+		}
+		
+		// Broadcast to local WebSocket clients (fallback or direct)
 		if s.realTimeService != nil {
 			s.realTimeService.BroadcastPriceUpdate(priceUpdate)
 		}
@@ -167,10 +191,16 @@ func (s *PriceSimulatorService) updateAllPrices() {
 	
 	if updatedCount > 0 {
 		fmt.Printf("✅ Updated %d/%d stock prices", updatedCount, len(stocks))
+		
+		// Show broadcasting status
+		if s.redisService != nil {
+			fmt.Print(" 📡 Published to Redis")
+		}
+		
 		if s.realTimeService != nil {
 			clientCount := s.realTimeService.GetConnectedClientsCount()
 			if clientCount > 0 {
-				fmt.Printf(" 📡 Broadcasted to %d clients", clientCount)
+				fmt.Printf(" 🔌 WebSocket clients: %d", clientCount)
 			}
 		}
 		fmt.Println()
@@ -207,11 +237,11 @@ func (s *PriceSimulatorService) saveHistoricalPrice(symbol string, oldPrice, new
 }
 
 // generateRealisticPrice creates realistic price movements
-func (s *PriceSimulatorService) generateRealisticPrice(stock domain.Stock) float64 {
+func (s *PriceSimulatorService) generateRealisticPrice(stock domain.Stock, rng *rand.Rand) float64 {
 	currentPrice := stock.CurrentPrice
 	
 	// Market trends (simulate bull/bear market influences)
-	marketTrend := s.getMarketTrend()
+	marketTrend := s.getMarketTrend(rng)
 	
 	// Base volatility
 	baseVolatility := s.volatility
@@ -224,14 +254,14 @@ func (s *PriceSimulatorService) generateRealisticPrice(stock domain.Stock) float
 	}
 	
 	// Random change with market bias
-	randomChange := (rand.Float64() - 0.5) * 2 * baseVolatility // -volatility% to +volatility%
+	randomChange := (rng.Float64() - 0.5) * 2 * baseVolatility // -volatility% to +volatility%
 	trendInfluence := marketTrend * 0.3 // Market trend contributes 30%
 	
 	changePercent := randomChange + trendInfluence
 	
 	// Apply extreme events (rare large moves)
-	if rand.Float64() < 0.02 { // 2% chance
-		extremeChange := (rand.Float64() - 0.5) * 2 * s.maxChange
+	if rng.Float64() < 0.02 { // 2% chance
+		extremeChange := (rng.Float64() - 0.5) * 2 * s.maxChange
 		changePercent = extremeChange
 		if math.Abs(extremeChange) > 3 {
 			fmt.Printf("💥 EXTREME MOVE: %s %+.1f%%\n", stock.Symbol, extremeChange)
@@ -252,22 +282,22 @@ func (s *PriceSimulatorService) generateRealisticPrice(stock domain.Stock) float
 }
 
 // getMarketTrend simulates overall market sentiment
-func (s *PriceSimulatorService) getMarketTrend() float64 {
+func (s *PriceSimulatorService) getMarketTrend(rng *rand.Rand) float64 {
 	// Simulate market cycles
 	hour := time.Now().Hour()
 	
 	// Market opening hours tend to be more volatile
 	if hour >= 9 && hour <= 10 {
-		return (rand.Float64() - 0.5) * 2 // Higher volatility at open
+		return (rng.Float64() - 0.5) * 2 // Higher volatility at open
 	}
 	
 	// Lunch time usually calmer
 	if hour >= 12 && hour <= 13 {
-		return (rand.Float64() - 0.5) * 0.5 // Lower volatility
+		return (rng.Float64() - 0.5) * 0.5 // Lower volatility
 	}
 	
 	// Normal market hours
-	return (rand.Float64() - 0.5) * 1.0
+	return (rng.Float64() - 0.5) * 1.0
 }
 
 // getPriceIndicator returns emoji indicator for price movement
@@ -310,6 +340,12 @@ func (s *PriceSimulatorService) GetStatus() map[string]interface{} {
 		"update_interval": s.updateInterval.String(),
 		"volatility":      s.volatility,
 		"max_change":      s.maxChange,
+		"redis_enabled":   s.redisService != nil,
+		"redis_connected": false,
+	}
+	
+	if s.redisService != nil {
+		status["redis_connected"] = s.redisService.GetConnectionStatus()
 	}
 	
 	if s.realTimeService != nil {
@@ -317,4 +353,17 @@ func (s *PriceSimulatorService) GetStatus() map[string]interface{} {
 	}
 	
 	return status
+}
+
+// PublishMarketEvent publishes special market events to Redis
+func (s *PriceSimulatorService) PublishMarketEvent(eventType, message string) {
+	if s.redisService != nil {
+		if err := s.redisService.PublishMarketStatus(eventType + ": " + message); err != nil {
+			log.Printf("⚠️ Failed to publish market event: %v", err)
+		}
+	}
+	
+	if s.realTimeService != nil {
+		s.realTimeService.BroadcastMarketStatus(eventType + ": " + message)
+	}
 } 

@@ -83,15 +83,15 @@ func (s *SimplePriceSimulatorService) runSimulation() {
 	ticker := time.NewTicker(s.updateInterval)
 	defer ticker.Stop()
 	
-	// Seed random number generator
-	rand.Seed(time.Now().UnixNano())
+	// Create random number generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	
 	log.Println("📈 Starting simple automatic price updates...")
 	
 	for {
 		select {
 		case <-ticker.C:
-			s.updateAllPrices()
+			s.updateAllPrices(rng)
 		case <-s.stopChan:
 			log.Println("📉 Price simulation stopped")
 			return
@@ -100,7 +100,7 @@ func (s *SimplePriceSimulatorService) runSimulation() {
 }
 
 // updateAllPrices updates all stock prices with realistic movements
-func (s *SimplePriceSimulatorService) updateAllPrices() {
+func (s *SimplePriceSimulatorService) updateAllPrices(rng *rand.Rand) {
 	stocks, err := s.stockRepo.GetAll()
 	if err != nil {
 		log.Printf("❌ Failed to get stocks for price update: %v", err)
@@ -117,7 +117,7 @@ func (s *SimplePriceSimulatorService) updateAllPrices() {
 	updatedCount := 0
 	for _, stock := range stocks {
 		oldPrice := stock.CurrentPrice
-		newPrice := s.generateRealisticPrice(stock)
+		newPrice := s.generateRealisticPrice(stock, rng)
 		
 		// Update stock price in database
 		err := s.stockRepo.UpdatePrice(stock.Symbol, newPrice)
@@ -177,11 +177,11 @@ func (s *SimplePriceSimulatorService) saveHistoricalPrice(symbol string, oldPric
 }
 
 // generateRealisticPrice creates realistic price movements
-func (s *SimplePriceSimulatorService) generateRealisticPrice(stock domain.Stock) float64 {
+func (s *SimplePriceSimulatorService) generateRealisticPrice(stock domain.Stock, rng *rand.Rand) float64 {
 	currentPrice := stock.CurrentPrice
 	
 	// Market trends (simulate bull/bear market influences)
-	marketTrend := s.getMarketTrend()
+	marketTrend := s.getMarketTrend(rng)
 	
 	// Base volatility
 	baseVolatility := s.volatility
@@ -194,14 +194,14 @@ func (s *SimplePriceSimulatorService) generateRealisticPrice(stock domain.Stock)
 	}
 	
 	// Random change with market bias
-	randomChange := (rand.Float64() - 0.5) * 2 * baseVolatility // -volatility% to +volatility%
+	randomChange := (rng.Float64() - 0.5) * 2 * baseVolatility // -volatility% to +volatility%
 	trendInfluence := marketTrend * 0.3 // Market trend contributes 30%
 	
 	changePercent := randomChange + trendInfluence
 	
 	// Apply extreme events (rare large moves)
-	if rand.Float64() < 0.02 { // 2% chance
-		extremeChange := (rand.Float64() - 0.5) * 2 * s.maxChange
+	if rng.Float64() < 0.02 { // 2% chance
+		extremeChange := (rng.Float64() - 0.5) * 2 * s.maxChange
 		changePercent = extremeChange
 		if math.Abs(extremeChange) > 3 {
 			fmt.Printf("💥 EXTREME MOVE: %s %+.1f%%\n", stock.Symbol, extremeChange)
@@ -222,22 +222,22 @@ func (s *SimplePriceSimulatorService) generateRealisticPrice(stock domain.Stock)
 }
 
 // getMarketTrend simulates overall market sentiment
-func (s *SimplePriceSimulatorService) getMarketTrend() float64 {
+func (s *SimplePriceSimulatorService) getMarketTrend(rng *rand.Rand) float64 {
 	// Simulate market cycles
 	hour := time.Now().Hour()
 	
 	// Market opening hours tend to be more volatile
 	if hour >= 9 && hour <= 10 {
-		return (rand.Float64() - 0.5) * 2 // Higher volatility at open
+		return (rng.Float64() - 0.5) * 2 // Higher volatility at open
 	}
 	
 	// Lunch time usually calmer
 	if hour >= 12 && hour <= 13 {
-		return (rand.Float64() - 0.5) * 0.5 // Lower volatility
+		return (rng.Float64() - 0.5) * 0.5 // Lower volatility
 	}
 	
 	// Normal market hours
-	return (rand.Float64() - 0.5) * 1.0
+	return (rng.Float64() - 0.5) * 1.0
 }
 
 // getPriceIndicator returns emoji indicator for price movement

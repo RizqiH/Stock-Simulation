@@ -13,46 +13,83 @@ import (
 )
 
 type RealTimeService struct {
-	clients    map[string]*websocket.Conn
-	clientsMu  sync.RWMutex
-	upgrader   websocket.Upgrader
-	broadcast  chan domain.PriceUpdateMessage
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
+	clients      map[string]*websocket.Conn
+	clientsMu    sync.RWMutex
+	upgrader     websocket.Upgrader
+	broadcast    chan domain.PriceUpdateMessage
+	register     chan *websocket.Conn
+	unregister   chan *websocket.Conn
+	redisService *RedisService // Redis service for pub/sub
 }
 
-func NewRealTimeService() *RealTimeService {
+func NewRealTimeService(redisService *RedisService) *RealTimeService {
 	return &RealTimeService{
-		clients:    make(map[string]*websocket.Conn),
+		clients:      make(map[string]*websocket.Conn),
+		redisService: redisService,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow connections from any origin in development
 			},
 		},
-		broadcast:  make(chan domain.PriceUpdateMessage),
+		broadcast:  make(chan domain.PriceUpdateMessage, 100),
 		register:   make(chan *websocket.Conn),
 		unregister: make(chan *websocket.Conn),
 	}
 }
 
-// Start the WebSocket hub
+// Start the WebSocket hub and Redis subscription
 func (s *RealTimeService) Start() {
 	log.Println("🔌 Starting WebSocket service for real-time updates...")
 	
-	go func() {
-		for {
-			select {
-			case conn := <-s.register:
-				s.handleNewConnection(conn)
-			
-			case conn := <-s.unregister:
-				s.handleDisconnection(conn)
-			
-			case priceUpdate := <-s.broadcast:
-				s.broadcastToAllClients(priceUpdate)
-			}
+	// Start WebSocket hub
+	go s.runWebSocketHub()
+	
+	// Start Redis subscription if available
+	if s.redisService != nil {
+		go s.subscribeToRedis()
+	} else {
+		log.Println("⚠️ Redis service not available, using WebSocket only")
+	}
+}
+
+// runWebSocketHub manages WebSocket connections and broadcasting
+func (s *RealTimeService) runWebSocketHub() {
+	for {
+		select {
+		case conn := <-s.register:
+			s.handleNewConnection(conn)
+		
+		case conn := <-s.unregister:
+			s.handleDisconnection(conn)
+		
+		case priceUpdate := <-s.broadcast:
+			s.broadcastToAllClients(priceUpdate)
 		}
-	}()
+	}
+}
+
+// subscribeToRedis subscribes to Redis price updates
+func (s *RealTimeService) subscribeToRedis() {
+	log.Println("🔌 Starting Redis subscription for price updates...")
+	
+	priceUpdateChan, err := s.redisService.SubscribeToPriceUpdates()
+	if err != nil {
+		log.Printf("❌ Failed to subscribe to Redis: %v", err)
+		return
+	}
+	
+	// Forward Redis messages to WebSocket broadcast
+	for priceUpdate := range priceUpdateChan {
+		select {
+		case s.broadcast <- priceUpdate:
+			// Successfully queued for broadcast
+		default:
+			// Channel full, drop message
+			log.Println("⚠️ WebSocket broadcast channel full, dropping Redis message")
+		}
+	}
+	
+	log.Println("📡 Redis subscription ended")
 }
 
 // Handle WebSocket connection upgrade
@@ -80,9 +117,13 @@ func (s *RealTimeService) handleClient(conn *websocket.Conn) {
 	}()
 	
 	// Set read deadline and pong handler for keepalive
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		log.Printf("⚠️ Failed to set read deadline: %v", err)
+	}
 	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		if err := conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+			log.Printf("⚠️ Failed to set read deadline in pong handler: %v", err)
+		}
 		return nil
 	})
 	
@@ -117,7 +158,9 @@ func (s *RealTimeService) handleClientMessage(conn *websocket.Conn, message []by
 			"type":      "pong",
 			"timestamp": time.Now().Unix(),
 		}
-		s.sendToClient(conn, pongResponse)
+		if err := s.sendToClient(conn, pongResponse); err != nil {
+			log.Printf("⚠️ Failed to send pong response: %v", err)
+		}
 	}
 }
 
@@ -132,12 +175,15 @@ func (s *RealTimeService) handleNewConnection(conn *websocket.Conn) {
 	
 	// Send welcome message
 	welcomeMsg := map[string]interface{}{
-		"type":    "welcome",
-		"message": "Connected to real-time price updates",
-		"client_id": clientID,
-		"timestamp": time.Now().Unix(),
+		"type":       "welcome",
+		"message":    "Connected to real-time price updates",
+		"client_id":  clientID,
+		"timestamp":  time.Now().Unix(),
+		"redis_enabled": s.redisService != nil,
 	}
-	s.sendToClient(conn, welcomeMsg)
+	if err := s.sendToClient(conn, welcomeMsg); err != nil {
+		log.Printf("⚠️ Failed to send welcome message: %v", err)
+	}
 }
 
 // Handle client disconnection
@@ -155,13 +201,21 @@ func (s *RealTimeService) handleDisconnection(conn *websocket.Conn) {
 	}
 }
 
-// Broadcast price update to all connected clients
+// BroadcastPriceUpdate publishes price update to Redis and broadcasts locally
 func (s *RealTimeService) BroadcastPriceUpdate(update domain.PriceUpdateMessage) {
+	// Publish to Redis if available (for scaling across multiple instances)
+	if s.redisService != nil {
+		if err := s.redisService.PublishPriceUpdate(update); err != nil {
+			log.Printf("⚠️ Failed to publish to Redis: %v", err)
+		}
+	}
+	
+	// Also broadcast locally for direct WebSocket connections
 	select {
 	case s.broadcast <- update:
 		// Message queued for broadcast
 	default:
-		log.Println("⚠️ Broadcast channel full, dropping price update")
+		log.Println("⚠️ Local broadcast channel full, dropping price update")
 	}
 }
 
@@ -178,6 +232,7 @@ func (s *RealTimeService) broadcastToAllClients(priceUpdate domain.PriceUpdateMe
 		"type":      "price_update",
 		"data":      priceUpdate,
 		"timestamp": time.Now().Unix(),
+		"source":    "redis", // Indicates this came from Redis pub/sub
 	}
 	
 	var disconnectedClients []string
@@ -199,9 +254,60 @@ func (s *RealTimeService) broadcastToAllClients(priceUpdate domain.PriceUpdateMe
 	}
 }
 
+// BroadcastMarketStatus broadcasts market status updates
+func (s *RealTimeService) BroadcastMarketStatus(status string) {
+	if s.redisService != nil {
+		if err := s.redisService.PublishMarketStatus(status); err != nil {
+			log.Printf("⚠️ Failed to publish market status to Redis: %v", err)
+		}
+	}
+	
+	// Also broadcast locally
+	message := map[string]interface{}{
+		"type":      "market_status",
+		"status":    status,
+		"timestamp": time.Now().Unix(),
+	}
+	
+	s.clientsMu.RLock()
+	for _, conn := range s.clients {
+		if err := s.sendToClient(conn, message); err != nil {
+			log.Printf("⚠️ Failed to send market status: %v", err)
+		}
+	}
+	s.clientsMu.RUnlock()
+}
+
+// BroadcastTradingAlert broadcasts trading alerts
+func (s *RealTimeService) BroadcastTradingAlert(alert domain.TradingAlert) {
+	if s.redisService != nil {
+		if err := s.redisService.PublishTradingAlert(alert); err != nil {
+			log.Printf("⚠️ Failed to publish alert to Redis: %v", err)
+		}
+	}
+	
+	// Also broadcast locally
+	message := map[string]interface{}{
+		"type":      "trading_alert",
+		"data":      alert,
+		"timestamp": time.Now().Unix(),
+	}
+	
+	s.clientsMu.RLock()
+	for _, conn := range s.clients {
+		if err := s.sendToClient(conn, message); err != nil {
+			log.Printf("⚠️ Failed to send trading alert: %v", err)
+		}
+	}
+	s.clientsMu.RUnlock()
+}
+
 // Send message to specific client
 func (s *RealTimeService) sendToClient(conn *websocket.Conn, message interface{}) error {
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		log.Printf("⚠️ Failed to set write deadline: %v", err)
+		return err
+	}
 	return conn.WriteJSON(message)
 }
 
@@ -218,12 +324,33 @@ func (s *RealTimeService) SendHeartbeat() {
 	defer s.clientsMu.RUnlock()
 	
 	heartbeat := map[string]interface{}{
-		"type":      "heartbeat",
-		"timestamp": time.Now().Unix(),
-		"clients":   len(s.clients),
+		"type":         "heartbeat",
+		"timestamp":    time.Now().Unix(),
+		"clients":      len(s.clients),
+		"redis_status": s.redisService != nil && s.redisService.GetConnectionStatus(),
 	}
 	
 	for _, conn := range s.clients {
-		s.sendToClient(conn, heartbeat)
+		if err := s.sendToClient(conn, heartbeat); err != nil {
+			log.Printf("⚠️ Failed to send heartbeat: %v", err)
+		}
 	}
+}
+
+// GetServiceStatus returns the service status including Redis
+func (s *RealTimeService) GetServiceStatus() map[string]interface{} {
+	s.clientsMu.RLock()
+	defer s.clientsMu.RUnlock()
+	
+	status := map[string]interface{}{
+		"websocket_clients": len(s.clients),
+		"redis_enabled":     s.redisService != nil,
+		"redis_connected":   false,
+	}
+	
+	if s.redisService != nil {
+		status["redis_connected"] = s.redisService.GetConnectionStatus()
+	}
+	
+	return status
 } 

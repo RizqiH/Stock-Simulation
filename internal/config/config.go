@@ -1,12 +1,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 )
 
@@ -45,8 +46,9 @@ type CORSConfig struct {
 }
 
 type RedisConfig struct {
-	URL  string
-	Port string
+	URL    string
+	Port   string
+	Client *redis.Client
 }
 
 func LoadConfig() *Config {
@@ -75,6 +77,25 @@ func LoadConfig() *Config {
 		ginMode = "release"
 	}
 	
+	// Initialize Redis client
+	redisURL := getEnv("REDIS_URL", "redis://localhost:6379")
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     strings.TrimPrefix(redisURL, "redis://"),
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	
+	// Test Redis connection
+	ctx := context.Background()
+	_, err := redisClient.Ping(ctx).Result()
+	if err != nil {
+		fmt.Printf("⚠️ Redis connection failed: %v\n", err)
+		fmt.Println("📝 Redis features will be disabled")
+		redisClient = nil
+	} else {
+		fmt.Println("✅ Redis connected successfully")
+	}
+	
 	return &Config{
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -99,8 +120,9 @@ func LoadConfig() *Config {
 			AllowedHeaders: []string{"Content-Type", "Authorization", "X-Requested-With"},
 		},
 		Redis: RedisConfig{
-			URL:  getEnv("REDIS_URL", "redis://localhost:6379"),
-			Port: getEnv("REDIS_PORT", "6379"),
+			URL:    redisURL,
+			Port:   getEnv("REDIS_PORT", "6379"),
+			Client: redisClient,
 		},
 	}
 }
@@ -112,25 +134,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvAsInt(key string, defaultValue int) int {
-	valueStr := getEnv(key, "")
-	if value, err := strconv.Atoi(valueStr); err == nil {
-		return value
-	}
-	return defaultValue
-}
 
-func getEnvAsDuration(key string, defaultValue string) time.Duration {
-	valueStr := getEnv(key, defaultValue)
-	if value, err := time.ParseDuration(valueStr); err == nil {
-		return value
-	}
-	// If parsing fails, parse the default value
-	if defaultDuration, err := time.ParseDuration(defaultValue); err == nil {
-		return defaultDuration
-	}
-	return time.Minute // fallback
-}
 
 // GetDSN returns the database connection string
 func (c *Config) GetDSN() string {

@@ -41,6 +41,16 @@ func main() {
     
     log.Printf("✅ Database connected successfully")
 
+    // Initialize Redis service
+    log.Printf("🔄 Initializing Redis service...")
+    redisService := services.NewRedisService(cfg.Redis.Client)
+    if redisService != nil {
+        log.Printf("✅ Redis service initialized successfully")
+        defer redisService.Close()
+    } else {
+        log.Printf("⚠️ Redis service disabled - running in WebSocket-only mode")
+    }
+
     // Initialize repositories
     log.Printf("🏗️ Initializing repositories...")
     userRepo := mysqlRepo.NewUserRepository(db)
@@ -60,13 +70,13 @@ func main() {
     advancedOrderService := services.NewAdvancedOrderService(advancedOrderRepo, stockRepo, portfolioRepo, userRepo, transactionService)
     commissionService := services.NewCommissionService()
     
-    // Initialize real-time service for WebSocket support
+    // Initialize real-time service with Redis support
     log.Printf("🔄 Initializing real-time services...")
-    realTimeService := services.NewRealTimeService()
+    realTimeService := services.NewRealTimeService(redisService)
     realTimeService.Start()
     
-    // Initialize price simulator service with WebSocket support
-    priceSimulator := services.NewPriceSimulatorService(stockRepo, historicalPriceRepo, realTimeService)
+    // Initialize price simulator service with Redis and WebSocket support
+    priceSimulator := services.NewPriceSimulatorService(stockRepo, historicalPriceRepo, realTimeService, redisService)
     
     // Start automatic price simulation (only in development or if explicitly enabled)
     if cfg.IsDevelopment() {
@@ -132,14 +142,26 @@ func main() {
     
     router.Use(middleware.Logging())
 
-    // Health check endpoint
+    // Health check endpoint with Redis status
     router.GET("/health", func(c *gin.Context) {
-        c.JSON(200, gin.H{
+        healthStatus := gin.H{
             "status": "healthy", 
             "service": "stock-simulation-api",
             "environment": cfg.Server.ENV,
             "version": "1.0.0",
-        })
+            "database": "connected",
+        }
+        
+        // Add Redis status
+        if redisService != nil {
+            healthStatus["redis"] = "connected"
+            healthStatus["redis_available"] = redisService.GetConnectionStatus()
+        } else {
+            healthStatus["redis"] = "disabled"
+            healthStatus["redis_available"] = false
+        }
+        
+        c.JSON(200, healthStatus)
     })
     
     // Root endpoint
@@ -148,6 +170,12 @@ func main() {
             "message": "StockSim Pro API",
             "version": "1.0.0",
             "environment": cfg.Server.ENV,
+            "features": gin.H{
+                "websocket": true,
+                "redis_pubsub": redisService != nil,
+                "real_time_updates": true,
+                "price_simulation": true,
+            },
             "endpoints": gin.H{
                 "health": "/health",
                 "api": "/api/v1",
@@ -184,14 +212,27 @@ func main() {
             c.JSON(200, gin.H{"simulator": status})
         })
         
-        // WebSocket status endpoint
+        // WebSocket and Redis status endpoint
         public.GET("/ws/status", func(c *gin.Context) {
+            status := realTimeService.GetServiceStatus()
             c.JSON(200, gin.H{
                 "websocket_enabled": true,
                 "connected_clients": realTimeService.GetConnectedClientsCount(),
                 "endpoint": "/api/v1/ws",
+                "redis_enabled": status["redis_enabled"],
+                "redis_connected": status["redis_connected"],
             })
         })
+        
+        // Redis-specific endpoints (if enabled)
+        if redisService != nil {
+            public.GET("/redis/status", func(c *gin.Context) {
+                c.JSON(200, gin.H{
+                    "redis_connected": redisService.GetConnectionStatus(),
+                    "features": []string{"price_updates", "market_status", "trading_alerts"},
+                })
+            })
+        }
         
         // Only allow simulator control in development
         if cfg.IsDevelopment() {
@@ -203,6 +244,18 @@ func main() {
                 priceSimulator.Stop()
                 c.JSON(200, gin.H{"message": "Price simulator stopped"})
             })
+            
+            // Development Redis testing endpoints
+            if redisService != nil {
+                public.POST("/dev/redis/publish-test", func(c *gin.Context) {
+                    err := redisService.PublishMarketStatus("test_message")
+                    if err != nil {
+                        c.JSON(500, gin.H{"error": err.Error()})
+                        return
+                    }
+                    c.JSON(200, gin.H{"message": "Test message published to Redis"})
+                })
+            }
         }
     }
 
@@ -244,6 +297,12 @@ func main() {
     log.Printf("📡 Server starting on %s", cfg.GetServerAddress())
     log.Printf("🌐 API endpoints available at: http://%s/api/v1", cfg.GetServerAddress())
     log.Printf("💬 WebSocket available at: ws://%s/api/v1/ws", cfg.GetServerAddress())
+    
+    if redisService != nil {
+        log.Printf("📡 Redis pub/sub enabled for real-time broadcasting")
+    } else {
+        log.Printf("⚠️ Redis disabled - using WebSocket-only mode")
+    }
     
     if cfg.IsProduction() {
         log.Printf("🔒 Running in PRODUCTION mode")

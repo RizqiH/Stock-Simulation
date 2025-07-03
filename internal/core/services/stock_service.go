@@ -81,14 +81,14 @@ func (s *stockService) SimulateMarketMovement() error {
 		return fmt.Errorf("failed to get stocks: %w", err)
 	}
 
-	// Seed random number generator
-	rand.Seed(time.Now().UnixNano())
+	// Create random number generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	fmt.Println("📊 Simulating market movement...")
 
 	// Update each stock with random price movement
 	for _, stock := range stocks {
-		newPrice := s.generateRandomPrice(stock.CurrentPrice)
+		newPrice := s.generateRandomPrice(stock.CurrentPrice, rng)
 		
 		err = s.stockRepo.UpdatePrice(stock.Symbol, newPrice)
 		if err != nil {
@@ -118,16 +118,16 @@ func (s *stockService) SimulateMarketMovement() error {
 }
 
 // generateRandomPrice creates a new price with realistic market movement
-func (s *stockService) generateRandomPrice(currentPrice float64) float64 {
+func (s *stockService) generateRandomPrice(currentPrice float64, rng *rand.Rand) float64 {
 	// Generate price movement between -3% to +3%
 	maxChangePercent := 3.0
-	changePercent := (rand.Float64() - 0.5) * 2 * maxChangePercent
+	changePercent := (rng.Float64() - 0.5) * 2 * maxChangePercent
 
 	// Apply volatility factor
 	volatilityFactor := 1.0
-	if rand.Float64() < 0.1 { // 10% chance of high volatility
+	if rng.Float64() < 0.1 { // 10% chance of high volatility
 		volatilityFactor = 2.0
-	} else if rand.Float64() < 0.05 { // 5% chance of very high volatility
+	} else if rng.Float64() < 0.05 { // 5% chance of very high volatility
 		volatilityFactor = 3.0
 	}
 

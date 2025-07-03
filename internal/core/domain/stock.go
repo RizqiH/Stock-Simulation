@@ -52,5 +52,29 @@ type ChartIndicators struct {
     Volume []int64   `json:"volume"` // Volume data
 }
 
+// TradingAlert represents alerts sent through Redis
+type TradingAlert struct {
+    ID          string    `json:"id"`
+    UserID      int       `json:"user_id,omitempty"`
+    Symbol      string    `json:"symbol"`
+    Type        string    `json:"type"` // "price_alert", "volume_alert", "news", etc.
+    Title       string    `json:"title"`
+    Message     string    `json:"message"`
+    Severity    string    `json:"severity"` // "info", "warning", "error"
+    Price       *float64  `json:"price,omitempty"`
+    Volume      *int64    `json:"volume,omitempty"`
+    Timestamp   time.Time `json:"timestamp"`
+    ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// MarketStatusMessage represents market status updates
+type MarketStatusMessage struct {
+    Status      string    `json:"status"` // "open", "closed", "pre_market", "after_hours"
+    Message     string    `json:"message"`
+    Timestamp   time.Time `json:"timestamp"`
+    NextOpen    *time.Time `json:"next_open,omitempty"`
+    NextClose   *time.Time `json:"next_close,omitempty"`
+}
+
 // Note: Order types, status, and structures are now defined in order.go
 // This file focuses on Stock-specific domain models
