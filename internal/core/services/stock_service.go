@@ -82,6 +82,7 @@ func (s *stockService) SimulateMarketMovement() error {
 	}
 
 	// Create random number generator
+	// #nosec G404 -- Using math/rand for price simulation, not cryptographic purposes
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	fmt.Println("📊 Simulating market movement...")

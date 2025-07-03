@@ -151,6 +151,7 @@ func (s *portfolioService) GetPortfolioPerformanceHistory(userID int, startDate,
 	
 	for currentDate.Before(endDate) || currentDate.Equal(endDate) {
 		// Simulate realistic portfolio movement (±2% daily volatility)
+		// #nosec G404 -- Using math/rand for portfolio simulation, not cryptographic purposes
 		dailyChange := (rand.Float64() - 0.5) * 0.04 // ±2% daily change
 		marketTrend := 0.0002 // Small positive trend (about 7% annually)
 		

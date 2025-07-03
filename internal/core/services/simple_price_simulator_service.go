@@ -84,6 +84,7 @@ func (s *SimplePriceSimulatorService) runSimulation() {
 	defer ticker.Stop()
 	
 	// Create random number generator
+	// #nosec G404 -- Using math/rand for price simulation, not cryptographic purposes
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	
 	log.Println("📈 Starting simple automatic price updates...")

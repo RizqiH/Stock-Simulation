@@ -113,7 +113,9 @@ func (s *RealTimeService) HandleWebSocket(w http.ResponseWriter, r *http.Request
 func (s *RealTimeService) handleClient(conn *websocket.Conn) {
 	defer func() {
 		s.unregister <- conn
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			log.Printf("⚠️ Failed to close WebSocket connection: %v", err)
+		}
 	}()
 	
 	// Set read deadline and pong handler for keepalive
