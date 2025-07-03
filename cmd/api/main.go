@@ -78,13 +78,9 @@ func main() {
     // Initialize price simulator service with Redis and WebSocket support
     priceSimulator := services.NewPriceSimulatorService(stockRepo, historicalPriceRepo, realTimeService, redisService)
     
-    // Start automatic price simulation (only in development or if explicitly enabled)
-    if cfg.IsDevelopment() {
-        log.Printf("📈 Starting automatic price simulation (development mode)...")
-        priceSimulator.Start()
-    } else {
-        log.Printf("📈 Price simulation disabled in production (start manually if needed)")
-    }
+    // Start automatic price simulation in all environments
+    log.Printf("📈 Starting automatic price simulation...")
+    priceSimulator.Start()
     
     // Ensure services stop when application exits
     defer priceSimulator.Stop()
