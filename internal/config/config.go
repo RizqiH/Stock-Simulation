@@ -156,8 +156,19 @@ func (c *Config) GetDSN() string {
 				}
 			}
 			
-			// For external Railway connections, add TLS
-			if strings.Contains(c.Database.URL, "proxy.rlwy.net") || strings.Contains(c.Database.URL, "railway.app") {
+			// For external Railway connections, disable TLS for proxy
+			if strings.Contains(c.Database.URL, "proxy.rlwy.net") {
+				if !strings.Contains(c.Database.URL, "tls=") {
+					if strings.Contains(c.Database.URL, "?") {
+						return c.Database.URL + "&tls=false&charset=utf8mb4&parseTime=True&loc=Local"
+					} else {
+						return c.Database.URL + "?tls=false&charset=utf8mb4&parseTime=True&loc=Local"
+					}
+				}
+			}
+			
+			// For railway.app connections, add TLS
+			if strings.Contains(c.Database.URL, "railway.app") {
 				if !strings.Contains(c.Database.URL, "tls=") {
 					if strings.Contains(c.Database.URL, "?") {
 						return c.Database.URL + "&tls=true&charset=utf8mb4&parseTime=True&loc=Local"
@@ -188,8 +199,10 @@ func (c *Config) GetDSN() string {
 				c.Database.DBName,
 			)
 			
-			// Add TLS only for external Railway connections
-			if strings.Contains(c.Database.Host, "proxy.rlwy.net") || strings.Contains(c.Database.Host, "railway.app") {
+			// Add TLS configuration for Railway connections
+			if strings.Contains(c.Database.Host, "proxy.rlwy.net") {
+				dsn += "&tls=false"
+			} else if strings.Contains(c.Database.Host, "railway.app") {
 				dsn += "&tls=true"
 			}
 			// Do NOT add TLS for .railway.internal connections
