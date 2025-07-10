@@ -61,6 +61,7 @@ func LoadConfig() *Config {
 	corsOrigins := []string{
 		"http://localhost:3000",
 		"http://127.0.0.1:3000",
+		"https://stock-simulation-frontend.vercel.app",
 	}
 
 	if envOrigins := getEnv("CORS_ORIGINS", ""); envOrigins != "" {

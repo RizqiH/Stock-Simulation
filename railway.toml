@@ -32,7 +32,7 @@ DATABASE_URL = "${{MySQL.DATABASE_URL}}"
 JWT_SECRET = "your-production-jwt-secret-change-this-immediately"
 
 # CORS Configuration - Update with your frontend domain
-CORS_ORIGINS = "https://your-frontend-domain.railway.app,https://your-custom-domain.com"
+CORS_ORIGINS = "https://stock-simulation-frontend.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
 
 # Redis Configuration (if you add Redis service)
 # REDIS_URL = "${{Redis.REDIS_URL}}"
