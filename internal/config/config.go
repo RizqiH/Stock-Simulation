@@ -176,53 +176,49 @@ func (c *Config) GetDSN() string {
 			}
 
 			// For non-mysql:// URLs, handle as before
-			cleanURL := c.Database.URL
+			baseURL := c.Database.URL
 
 			// For Railway internal connections, don't add TLS
-			if strings.Contains(c.Database.URL, "railway.internal") {
+			if strings.Contains(baseURL, "railway.internal") {
 				// Clean internal URL - remove TLS for internal connections
-				cleanURL = strings.Replace(c.Database.URL, "&tls=true", "", -1)
+				cleanURL := strings.Replace(baseURL, "&tls=true", "", -1)
 				cleanURL = strings.Replace(cleanURL, "?tls=true", "", -1)
 
 				// Add required parameters for Railway internal
 				if strings.Contains(cleanURL, "?") {
 					return cleanURL + "&charset=utf8mb4&parseTime=True&loc=Local"
-				} else {
-					return cleanURL + "?charset=utf8mb4&parseTime=True&loc=Local"
 				}
+				return cleanURL + "?charset=utf8mb4&parseTime=True&loc=Local"
 			}
 
 			// For external Railway connections, disable TLS for proxy
-			if strings.Contains(c.Database.URL, "proxy.rlwy.net") {
-				if !strings.Contains(c.Database.URL, "tls=") {
-					if strings.Contains(c.Database.URL, "?") {
-						return c.Database.URL + "&tls=false&charset=utf8mb4&parseTime=True&loc=Local"
-					} else {
-						return c.Database.URL + "?tls=false&charset=utf8mb4&parseTime=True&loc=Local"
+			if strings.Contains(baseURL, "proxy.rlwy.net") {
+				if !strings.Contains(baseURL, "tls=") {
+					if strings.Contains(baseURL, "?") {
+						return baseURL + "&tls=false&charset=utf8mb4&parseTime=True&loc=Local"
 					}
+					return baseURL + "?tls=false&charset=utf8mb4&parseTime=True&loc=Local"
 				}
 			}
 
 			// For railway.app connections, add TLS
-			if strings.Contains(c.Database.URL, "railway.app") {
-				if !strings.Contains(c.Database.URL, "tls=") {
-					if strings.Contains(c.Database.URL, "?") {
-						return c.Database.URL + "&tls=true&charset=utf8mb4&parseTime=True&loc=Local"
-					} else {
-						return c.Database.URL + "?tls=true&charset=utf8mb4&parseTime=True&loc=Local"
+			if strings.Contains(baseURL, "railway.app") {
+				if !strings.Contains(baseURL, "tls=") {
+					if strings.Contains(baseURL, "?") {
+						return baseURL + "&tls=true&charset=utf8mb4&parseTime=True&loc=Local"
 					}
+					return baseURL + "?tls=true&charset=utf8mb4&parseTime=True&loc=Local"
 				}
 			}
 
 			// Default URL handling
-			if !strings.Contains(c.Database.URL, "charset=") {
-				if strings.Contains(c.Database.URL, "?") {
-					return c.Database.URL + "&charset=utf8mb4&parseTime=True&loc=Local"
-				} else {
-					return c.Database.URL + "?charset=utf8mb4&parseTime=True&loc=Local"
+			if !strings.Contains(baseURL, "charset=") {
+				if strings.Contains(baseURL, "?") {
+					return baseURL + "&charset=utf8mb4&parseTime=True&loc=Local"
 				}
+				return baseURL + "?charset=utf8mb4&parseTime=True&loc=Local"
 			}
-			return c.Database.URL
+			return baseURL
 		}
 
 		// If individual variables are set, use them
